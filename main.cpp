@@ -13,10 +13,11 @@ using namespace std;
 
 
 int main() {
+     // Generate the global scope
      map<string, string> empty{};
      Context context(empty);
      char* code;
-     read_history("/tmp/.lisp");
+     read_history("/tmp/.lisp"); // Stores the history in ram on most Linux computers
      while ((code = readline("> ")) != NULL) {
           try {
                while (!validate(code)) {
@@ -30,10 +31,4 @@ int main() {
           free(code);
           write_history("/tmp/.lisp");
      }
-  // string l = "(* (/ \"6\" 5) (eval \"(- 4 5)\"))";
-  // map<string, function<string(vector<string>)>> m{{"+", add}, {"-", sub}, {"*", mul}, {"/", divis}, {"eval", eval}};
-  // string::iterator begin(l.begin());
-  // cout << execute(m, begin, l.end()) << endl;
 }
-
-// Repl related functions

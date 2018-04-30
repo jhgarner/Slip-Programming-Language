@@ -1,6 +1,7 @@
 #include <iostream>
 #include "language.hpp"
 #include "context.hpp"
+#include <cstdlib>
 
 // helper functions
 void addNum(map<string, function<string(vector<string>)>>& m) {
@@ -15,6 +16,7 @@ void addNum(map<string, function<string(vector<string>)>>& m) {
      m["||"] = orL;
      m["!"] = notL;
      m["id"] = id;
+     m["rand"] = randomL;
 }
 void addIO(map<string, function<string(vector<string>)>>& m) {
      m["print"] = print;
@@ -27,12 +29,15 @@ void addString(map<string, function<string(vector<string>)>>& m) {
 }
 
 map<string, function<string(vector<string>)>> addAll() {
+     srand(time(0));
      map<string, function<string(vector<string>)>> m{};
      addNum(m);
      addIO(m);
      addString(m);
      return m;
 }
+
+// Turn 4.0 into 4
 string simplify(double x) {
      if (x == (int) x) {
           return to_string((int)x);
@@ -70,6 +75,14 @@ string divis(vector<string> l) {
      return simplify(acc);
 }
 
+string randomL(vector<string> p) {
+     if (p[0] == "0") {
+          return "0";
+     }
+     return to_string(rand() % stoi(p[0]));
+}
+
+// "0" is false and "1" is true
 string ls(vector<string> l) {
      for (u_int i = 0; i < l.size() - 1; i++) {
           auto fst = stod(l.at(i));
@@ -161,6 +174,8 @@ string define(vector<string> p) {
      return "Defined";
 }
 
+// Returns the last value passed to it
 string id(vector<string> p) {
      return p.at(p.size() - 1);
+
 }

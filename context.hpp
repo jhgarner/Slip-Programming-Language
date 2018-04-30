@@ -16,10 +16,10 @@ public:
 private:
 
      // Executes the code that needs to be evaluated
-     vector<string> execute(string::iterator &s, string::iterator end);
+     vector<string> parse(string::iterator &s, string::iterator end);
      // Leaves a string literal un-evaluated
-     bool quoted(string::iterator &s, string::iterator end);
-     bool parens(string::iterator &s, string::iterator end);
+     void quoted(string::iterator &s, string::iterator end);
+     void parens(string::iterator &s, string::iterator end);
 
      map<string, string> scope;
      static map<string, function<string(vector<string>)>> builtIn;

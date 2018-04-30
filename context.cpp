@@ -4,9 +4,12 @@
 #include "context.hpp"
 #include "language.hpp"
 
+// Global scope
 map<string, string> Context::globals{};
+// Global scope that is immutable
 map<string, function<string(vector<string>)>> Context::builtIn{};
 
+// Makes sure you have the right number of quotes and parenthesis
 bool validate(string s) {
      int countP = 0;
      int countQ = 0;
@@ -30,90 +33,22 @@ bool validate(string s) {
      return false;
 }
 
-// string Context::seq(vector<string> l) {
-//      string last = "";
-//      for (u_int i = 0; i < l.size(); i++) {
-//           auto val = l.at(i);
-//           last = val;
-//           this->scope["s" + to_string(i)] = [val](vector<string> _) {return val;};
-//      }
-//      return last;
-// }
-
-// string Context::isDef(vector<string> l) {
-//      for (auto val : this->scope)
-//           cout << "Got: " << val.first << endl;
-//      if (this->scope.count(l.at(0)) != 0) {
-//           return "1";
-//      }
-//      return "0";
-// }
-
-// // Modification to scope in eval will not propagate up
-// string Context::eval(vector<string> l) {
-     // for (auto v : scope) {
-     //      cout << v.first << endl;
-     //      if (i++ > 5) break;
-     // }
-//      auto newScope = this->scope;
-//      for (u_int i = 0; i < l.size(); i++) {
-//           auto val = l.at(i);
-//           newScope["p" + to_string(i - 1)] = [val](vector<string> _) {return val;};
-//      }
-//      Context newContext = Context(newScope);
-//      auto func = l.at(0);
-//      auto funcB = func.begin();
-//      cout << "string: " << string(funcB, func.end()) << endl;
-//      string r = newContext.execute(funcB, func.end());
-//      return r;
-// }
-// Exec has full power over the current scope
-// string Context::exec(vector<string> l) {
-//      for (u_int i = 0; i < l.size(); i++) {
-//           auto val = l.at(i);
-//           scope["p" + to_string(i)] = [val](vector<string> _) {return val;};
-//      }
-//      auto func = l.at(0);
-//      auto funcB = func.begin();
-//      return this->execute(funcB, func.end());
-// }
-
-// string Context::defineG(vector<string> l) {
-//      for (u_int i = 0; i < l.size(); i += 2) {
-//           string val = l.at(i + 1);
-//           // This function ignores the parameter and always returns the same thing
-//           cout << "Defining " << l.at(i) << " as " << val << endl;
-//           (Context::global)[l.at(i)] = [val, this](vector<string> u) {
-//                                             u.insert(u.begin(), val);
-//                                             return this->exec(u);
-//                                        };
-//      }
-//      return "Defined";
-// }
-// string Context::define(vector<string> l) {
-//      for (u_int i = 0; i < l.size(); i += 2) {
-//           string val = l.at(i + 1);
-//           // This function ignores the parameter and always returns the same thing
-//           cout << "Defining " << l.at(i) << " as " << val << endl;
-//           (Context::global)[l.at(i)] = [val, this](vector<string> u) {
-//                                             u.insert(u.begin(), val);
-//                                             return this->eval(u);
-//                                        };
-//      }
-//      return "Defined";
-// }
-string Context::let(vector<string> p) {
-     for (u_int i = 0; i < p.size(); i += 2) {
-          (scope)[p.at(i)] = p.at(i + 1);
+// Returns true if a name is defined
+string Context::isDef(vector<string> l) {
+     if (this->scope.count(l.at(0)) != 0 || globals.count(l.at(0)) != 0 || builtIn.count(l.at(0)) != 0) {
+          return "1";
      }
-     return "Created";
+     return "0";
 }
+
+// Runs all code in a file
 string Context::load(vector<string> l) {
      for (auto file: l) {
           ifstream ifs(file);
           string line = "";
           string tmpLine = "";
           while (getline(ifs, tmpLine)) {
+               // File comment
                if (tmpLine.at(0) == '#')
                     continue;
                line += tmpLine;
@@ -129,28 +64,32 @@ string Context::load(vector<string> l) {
 Context::Context(map<string, string> scope) {
      this->scope = scope;
      if (builtIn.empty()) {
+          // Create the built in scope if it doesn't exist yet
           builtIn = addAll();
-          builtIn["let"] = bind(&Context::let, this, placeholders::_1);
           builtIn["load"] = bind(&Context::load, this, placeholders::_1);
+          builtIn["isDef"] = bind(&Context::isDef, this, placeholders::_1);
      }
 
 }
 
 string Context::evaluate(string s) {
+     // Unwrap the main function for execution
      auto begin{s.begin() + 1};
      auto end{s.end() - 1};
      if (s.at(0) == '`') {
           begin++;
           end--;
      }
-     vector<string> result = execute(begin, end);
+
+     // Parse the code
+     vector<string> result = parse(begin, end);
      auto newScope = scope;
+
+     // Loop over the parameters
      for (int i = 1; i < result.size(); i++) {
           auto& val = result[i];
-          // Remove escape characters
-          // v.erase(remove_if(v.begin(), v.end(), [](char x){return x == '\\';}), v.end());
-          // Replace $vars with their values
           if (val.at(0) == '$') {
+               // in this case we are refering to a parameter
                try {
                     string varName = string(val.begin() + 1, val.end());
                     if (scope.count(varName) != 0)
@@ -160,12 +99,19 @@ string Context::evaluate(string s) {
                } catch (exception e) {
                     throw runtime_error("Unable to find: " + val);
                }
+          } else if (val.at(0) == '`') {
+               // Unquote a string
+               val = string(val.begin() + 1, val.end() - 1);
           } else if (val.at(0) == '(') {
+               // Execute the nested block
                Context cont(scope);
                val = cont.evaluate(val);
           }
+          // Add the value as a parameter
           newScope["p" + to_string(i)] = val;
      }
+
+     // Recursively evaluate code until a builtin is reached
      if (result.at(0).at(0) == '(') {
           Context cont(newScope);
           string ret = cont.evaluate(result.at(0));
@@ -182,7 +128,8 @@ string Context::evaluate(string s) {
           Context cont(newScope);
           return builtIn.at(result.at(0))(vector<string>(result.begin() + 1, result.end()));
      } else {
-          cout << "The following were defined:";
+          // The function does not exist
+          cout << "The following had been defined:";
           for (auto v: scope)
                cout << ", " << v.first << ": " << v.second;
           cout << endl;
@@ -191,34 +138,36 @@ string Context::evaluate(string s) {
 }
 
 
-vector<string> Context::execute(string::iterator &s, string::iterator end) {
+vector<string> Context::parse(string::iterator &s, string::iterator end) {
+     // Holds all words found
      vector<string> params;
+     // Stores the beginning of the current word
      string::iterator last(s);
-     bool clean;
      for (;s != end; s++) {
           switch (*s) {
           case '(':
                if (last != s) {
+                    // Catches W()rld
                     throw runtime_error("A word containing parenthesis must be wrapped in quotes");
                } else {
-                    clean = parens(++s, end) || clean;
+                    // catches (+ 1 1)
+                    parens(++s, end);
                     params.push_back(string(last, s + 1));
                     last = s + 1;
                }
                break;
           case '\t':
           case ' ':
+               // Catches whitespace
                if (last != s) {
                     params.push_back(string(last, s));
                }
                last = s + 1;
                break;
-          case '\\':
-               clean = true;
-               break;
           case '`':
+               // Catches `Hello World'
                last = s;
-               clean = quoted(++s, end) || clean;
+               quoted(++s, end);
                params.push_back(string(last, s + 1));
                last = s + 1;
                break;
@@ -227,6 +176,7 @@ vector<string> Context::execute(string::iterator &s, string::iterator end) {
                     // Catches case "))"
                     params.push_back(string(last, s));
                } else if (params.size() == 0) {
+                    // Catches ()
                     throw runtime_error("Unable to find a function in expression");
                }
           }
@@ -236,31 +186,29 @@ vector<string> Context::execute(string::iterator &s, string::iterator end) {
      return params;
 }
 
-bool Context::parens(string::iterator &s, string::iterator end) {
-     bool clean = false;
+// Ignores everything in parenthesis
+void Context::parens(string::iterator &s, string::iterator end) {
      for (;s != end; s++) {
           if (*s == ')') {
-               return clean;
+               return;
           } else if (*s == '(') {
                parens(++s, end);
           } else if (*s == '\\') {
                s++;
-               clean = true;
           }
      }
      throw runtime_error("No closing paren found");
 }
 
-bool Context::quoted(string::iterator &s, string::iterator end) {
-     bool clean = false;
+// Ignores everything in quotes
+void Context::quoted(string::iterator &s, string::iterator end) {
      for (;s != end; s++) {
           if (*s == '\'') {
-               return clean;
+               return;
           } else if (*s == '`') {
                quoted(++s, end);
           } else if (*s == '\\') {
                s++;
-               clean = true;
           }
      }
      throw runtime_error("No closing quote found");

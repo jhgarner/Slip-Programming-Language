@@ -28,3 +28,4 @@ string orL(vector<string>);
 string notL(vector<string>);
 string define(vector<string>);
 string id(vector<string>);
+string randomL(vector<string>);
